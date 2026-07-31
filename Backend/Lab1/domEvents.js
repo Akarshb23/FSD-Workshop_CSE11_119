@@ -22,7 +22,13 @@ button.addEventListener('save', ()=>{
     console.log("saving...")
 })
 
-
+function handleClick(event){
+    console.log("user clicked");
+}
+button.addEventListener('click', handleClick)
 button.dispatchEvent({
     eventType : "save"
+})
+button.dispatchEvent({
+    eventType : "click"
 })
