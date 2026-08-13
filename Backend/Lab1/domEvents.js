@@ -22,6 +22,10 @@ button.addEventListener('save', ()=>{
     console.log("saving...")
 })
 
+button.addEventListener('submit', ()=>{
+    console.log("Data Submitted successfully...")
+})
+
 function handleClick(event){
     console.log("user clicked");
 }
@@ -31,4 +35,7 @@ button.dispatchEvent({
 })
 button.dispatchEvent({
     eventType : "click"
+})
+button.dispatchEvent({
+    eventType : "submit"
 })
