@@ -1,4 +1,5 @@
 import http from "http";
+
 const array = [
     {
         id: 1,
@@ -37,7 +38,7 @@ const app = http.createServer((req, res) => {
     else if (url === "/user" && method === "POST") {
         let body = "";
         req.on("data", (chunk) => {
-            body += constant.toString();
+            body += chunk.toString();
         });
 
         req.on("end", () => {
