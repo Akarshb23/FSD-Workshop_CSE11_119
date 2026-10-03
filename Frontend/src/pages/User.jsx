@@ -1,118 +1,241 @@
-import React from 'react';
+import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import api from '../components/api.js';
+import './User.css';
 
 function User() {
   const navigate = useNavigate();
+  const [users, setUsers] = useState([]);
+  const [newUserCount, setNewUserCount] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState('All roles');
+  const [statusFilter, setStatusFilter] = useState('All statuses');
+  const [selectedUser, setSelectedUser] = useState(null);
+  const [retryCount, setRetryCount] = useState(0);
 
-  // Handle removing the auth token and sending the user away
+  useEffect(() => {
+    let isCurrentRequest = true;
+
+    const loadUsers = async () => {
+      setLoading(true);
+      setError('');
+
+      try {
+        const token = localStorage.getItem('userToken');
+        const response = await api.get('http://localhost:5000/api/users', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (isCurrentRequest) {
+          setUsers(response.data.users);
+          setNewUserCount(response.data.summary?.newUsers ?? 0);
+        }
+      } catch {
+        if (isCurrentRequest) {
+          setError('Users could not be loaded. Check your connection and try again.');
+        }
+      } finally {
+        if (isCurrentRequest) {
+          setLoading(false);
+        }
+      }
+    };
+
+    loadUsers();
+    return () => {
+      isCurrentRequest = false;
+    };
+  }, [retryCount]);
+
+  useEffect(() => {
+    if (!selectedUser) return undefined;
+
+    const closeOnEscape = (event) => {
+      if (event.key === 'Escape') setSelectedUser(null);
+    };
+    window.addEventListener('keydown', closeOnEscape);
+    return () => window.removeEventListener('keydown', closeOnEscape);
+  }, [selectedUser]);
+
   const handleLogout = () => {
-    // 1. Clear out the verification data token from memory
     localStorage.removeItem('userToken');
-    
-    // 2. Bounce the user right back to the login screen
     navigate('/login');
   };
 
+  const normalizedSearch = search.trim().toLowerCase();
+  const filteredUsers = users.filter((user) => {
+    const matchesSearch = [user.name, user.email, user.id]
+      .some((value) => String(value ?? '').toLowerCase().includes(normalizedSearch));
+    const matchesRole = roleFilter === 'All roles' || user.role === roleFilter;
+    const matchesStatus = statusFilter === 'All statuses' || user.status === statusFilter;
+    return matchesSearch && matchesRole && matchesStatus;
+  });
+
+  const activeUsers = users.filter((user) => user.status?.toLowerCase() === 'active').length;
+  const roles = [...new Set(users.map((user) => user.role).filter(Boolean))];
+  const statuses = [...new Set(users.map((user) => user.status).filter(Boolean))];
+
+  const formatDate = (value) => {
+    if (!value) return 'Not recorded';
+    const date = new Date(value);
+    return Number.isNaN(date.getTime())
+      ? 'Not recorded'
+      : new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric', year: 'numeric' }).format(date);
+  };
+
+  const statusClass = (status) => {
+    const normalizedStatus = status?.toLowerCase();
+    return ['active', 'inactive', 'suspended'].includes(normalizedStatus)
+      ? normalizedStatus
+      : 'unknown';
+  };
+
   return (
-    <div style={styles.container}>
-      <div style={styles.card}>
-        <div style={styles.avatarSection}>
-          <div style={styles.avatar}>👤</div>
-        </div>
-        
-        <h2 style={styles.title}>User Dashboard</h2>
-        <p style={styles.subtitle}>Welcome back to your private account area.</p>
+    <main className="users-dashboard">
+      <div className="users-shell">
+        <header className="users-header">
+          <div>
+            <p className="users-eyebrow">USER MANAGEMENT</p>
+            <h1>Users</h1>
+            <p className="users-subtitle">Manage and view all registered users</p>
+          </div>
+          <button className="logout-button" type="button" onClick={handleLogout}>Log out</button>
+        </header>
 
-        <div style={styles.infoBox}>
-          <p style={styles.infoText}>
-            <strong>Status:</strong> <span style={styles.badge}>Authenticated</span>
-          </p>
-          <p style={styles.infoText}>
-            <strong>Access Level:</strong> Standard User
-          </p>
-        </div>
+        <section className="user-stats" aria-label="User statistics">
+          <article className="user-stat">
+            <span className="stat-label">Total Users</span>
+            <strong>{loading ? '—' : users.length}</strong>
+            <span className="stat-note">Registered accounts</span>
+          </article>
+          <article className="user-stat">
+            <span className="stat-label">Active Users</span>
+            <strong>{loading ? '—' : activeUsers}</strong>
+            <span className="stat-note">Currently active</span>
+          </article>
+          <article className="user-stat">
+            <span className="stat-label">New Users</span>
+            <strong>{loading ? '—' : newUserCount}</strong>
+            <span className="stat-note">Registered in the last 30 days</span>
+          </article>
+        </section>
 
-        <button onClick={handleLogout} style={styles.button}>
-          Log Out Securely
-        </button>
+        <section className="users-panel" aria-labelledby="directory-title">
+          <div className="directory-heading">
+            <div>
+              <h2 id="directory-title">User directory</h2>
+              <p>{loading ? 'Loading registered accounts' : `${filteredUsers.length} of ${users.length} users`}</p>
+            </div>
+          </div>
+
+          <div className="table-toolbar">
+            <label className="search-control">
+              <span className="search-icon" aria-hidden="true">⌕</span>
+              <span className="visually-hidden">Search users by name, email, or ID</span>
+              <input
+                type="search"
+                placeholder="Search users..."
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+              />
+            </label>
+            <div className="filter-controls">
+              <label>
+                <span className="visually-hidden">Filter by role</span>
+                <select value={roleFilter} onChange={(event) => setRoleFilter(event.target.value)}>
+                  <option>All roles</option>
+                  {roles.map((role) => <option key={role}>{role}</option>)}
+                </select>
+              </label>
+              <label>
+                <span className="visually-hidden">Filter by status</span>
+                <select value={statusFilter} onChange={(event) => setStatusFilter(event.target.value)}>
+                  <option>All statuses</option>
+                  {statuses.map((status) => <option key={status}>{status}</option>)}
+                </select>
+              </label>
+            </div>
+          </div>
+
+          {error ? (
+            <div className="table-message error-message" role="alert">
+              <p>{error}</p>
+              <button type="button" onClick={() => setRetryCount((count) => count + 1)}>Retry</button>
+            </div>
+          ) : (
+            <div className="table-scroll" aria-busy={loading}>
+              <table className="users-table">
+                <thead>
+                  <tr>
+                    <th scope="col">ID</th>
+                    <th scope="col">Name</th>
+                    <th scope="col">Email</th>
+                    <th scope="col">Role</th>
+                    <th scope="col">Status</th>
+                    <th scope="col">Registered</th>
+                    <th scope="col"><span className="visually-hidden">Actions</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? Array.from({ length: 5 }, (_, index) => (
+                    <tr className="skeleton-row" key={index} aria-hidden="true">
+                      {Array.from({ length: 7 }, (_, cellIndex) => (
+                        <td key={cellIndex}><span className="skeleton-bar" /></td>
+                      ))}
+                    </tr>
+                  )) : filteredUsers.map((user) => (
+                    <tr key={user.id}>
+                      <td className="user-id">{user.id}</td>
+                      <td className="user-name">{user.name || '—'}</td>
+                      <td className="user-email">{user.email || '—'}</td>
+                      <td><span className="role-badge">{user.role || 'User'}</span></td>
+                      <td>
+                        <span className={`status-badge status-${statusClass(user.status)}`}>
+                          <span className="status-dot" />{user.status || 'Unknown'}
+                        </span>
+                      </td>
+                      <td className="registered-date">{formatDate(user.registeredAt)}</td>
+                      <td><button className="view-button" type="button" onClick={() => setSelectedUser(user)}>View</button></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+              {!loading && users.length === 0 && (
+                <div className="table-message">No registered users found.</div>
+              )}
+              {!loading && users.length > 0 && filteredUsers.length === 0 && (
+                <div className="table-message">No users match your search and filters.</div>
+              )}
+            </div>
+          )}
+        </section>
       </div>
-    </div>
+
+      {selectedUser && (
+        <div className="user-modal-backdrop" onClick={(event) => {
+          if (event.target === event.currentTarget) setSelectedUser(null);
+        }}>
+          <section className="user-modal" role="dialog" aria-modal="true" aria-labelledby="user-modal-title">
+            <div className="modal-heading">
+              <div>
+                <p className="users-eyebrow">USER DETAILS</p>
+                <h2 id="user-modal-title">{selectedUser.name || 'User'}</h2>
+              </div>
+              <button className="modal-close" type="button" aria-label="Close user details" onClick={() => setSelectedUser(null)}>×</button>
+            </div>
+            <dl className="user-details">
+              <div><dt>ID</dt><dd>{selectedUser.id}</dd></div>
+              <div><dt>Email</dt><dd>{selectedUser.email || 'Not recorded'}</dd></div>
+              <div><dt>Role</dt><dd>{selectedUser.role || 'User'}</dd></div>
+              <div><dt>Status</dt><dd>{selectedUser.status || 'Unknown'}</dd></div>
+              <div><dt>Registered</dt><dd>{formatDate(selectedUser.registeredAt)}</dd></div>
+            </dl>
+          </section>
+        </div>
+      )}
+    </main>
   );
 }
-
-// Layout styling matching the login/register theme perfectly
-const styles = {
-  container: {
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-    minHeight: '100vh',
-    backgroundColor: '#f4f6f8',
-    fontFamily: 'Arial, sans-serif',
-  },
-  card: {
-    width: '100%',
-    maxWidth: '450px',
-    padding: '2.5rem',
-    borderRadius: '8px',
-    backgroundColor: '#ffffff',
-    boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-    textAlign: 'center',
-  },
-  avatarSection: {
-    display: 'flex',
-    justifyContent: 'center',
-    marginBottom: '1rem',
-  },
-  avatar: {
-    fontSize: '3rem',
-    backgroundColor: '#e9ecef',
-    width: '80px',
-    height: '80px',
-    borderRadius: '50%',
-    display: 'flex',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  title: {
-    margin: '0 0 0.5rem 0',
-    fontSize: '1.75rem',
-    color: '#333',
-  },
-  subtitle: {
-    margin: '0 0 2rem 0',
-    color: '#666',
-    fontSize: '0.95rem',
-  },
-  infoBox: {
-    backgroundColor: '#f8f9fa',
-    padding: '1rem',
-    borderRadius: '6px',
-    textAlign: 'left',
-    marginBottom: '2rem',
-    border: '1px solid #e9ecef',
-  },
-  infoText: {
-    margin: '0.5rem 0',
-    fontSize: '0.9rem',
-    color: '#495057',
-  },
-  badge: {
-    color: '#28a745',
-    fontWeight: 'bold',
-  },
-  button: {
-    width: '100%',
-    padding: '0.75rem',
-    borderRadius: '4px',
-    border: 'none',
-    backgroundColor: '#dc3545', // Danger red color for logging out
-    color: '#fff',
-    fontSize: '1rem',
-    fontWeight: 'bold',
-    cursor: 'pointer',
-    transition: 'background-color 0.2s',
-  },
-};
 
 export default User;

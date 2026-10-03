@@ -1,0 +1,17 @@
+[
+  {
+    "id": "1790328061906",
+    "name": "Akarsh Bhardwaj",
+    "email": "akarshb23@gmail.com",
+    "password": "1234"
+  },
+  {
+    "id": "1790848790254",
+    "name": "Akarsh Bhardwaj",
+    "email": "akarsh@gmail.com",
+    "password": "1234",
+    "role": "User",
+    "status": "Active",
+    "registeredAt": "2026-10-01T09:59:50.254Z"
+  }
+]
